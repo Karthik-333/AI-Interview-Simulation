@@ -1,35 +1,9 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
+from app.api.interviews import router as interview_router
+from app.api.resume import router as resume_router 
 
-app=FastAPI()
 
-class InterviewRequest(BaseModel):
-    user_name: str
-class User(BaseModel):
-    name: str
-    age: int
+app = FastAPI()
 
-@app.get("/")
-def home():
-    return {
-        "message" : "Welcome to AI Interview Stimulation"
-    }
-@app.get("/health")
-def health():
-    return {
-        "status" : "Healthy"
-    }
-@app.post("/interview/start")
-def start_interview(request: InterviewRequest):
-    return {
-        "message": f"Interview started for {request.user_name}"
-    }
-@app.post("/test")
-def test(user:User):
-    return user
-
-@app.get("/users/{user_id}")
-def get_user(user_id: int):
-    return {
-        "user_id": user_id
-    }
+app.include_router(interview_router)
+app.include_router(resume_router)      
