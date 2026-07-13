@@ -1,11 +1,11 @@
 import chromadb
+from app.core.settings import CHROMA_DB_PATH
 
-client = chromadb.PersistentClient(path="./chroma_db")
+client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
 
 collection = client.get_or_create_collection(
     name="resume_chunks"
 )
-
 
 def store_chunks(chunks, embeddings):
 

@@ -1,18 +1,18 @@
 from pathlib import Path
 import shutil
-
+from app.core.settings import UPLOAD_DIR
 from app.rag.ingest_resume import ingest_resume
 from fastapi import UploadFile, HTTPException
 
 
 def save_uploaded_file(file: UploadFile):
     # Define the directory where you want to save the uploaded file
-    upload_dir = Path(__file__).resolve().parent.parent.parent / "uploads"
+    # upload_dir = Path(__file__).resolve().parent.parent.parent / "uploads"
     
-    upload_dir.mkdir(parents=True, exist_ok=True)
+    # upload_dir.mkdir(parents=True, exist_ok=True)
 
     # Define the path for the uploaded file
-    file_path = upload_dir / file.filename
+    file_path = UPLOAD_DIR / file.filename
 
     # Save the uploaded file to the specified path
     with open(file_path, "wb") as buffer:
