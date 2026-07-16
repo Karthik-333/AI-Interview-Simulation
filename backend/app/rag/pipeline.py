@@ -1,4 +1,6 @@
 # from app.rag.chunker import chunk_text
+from typer import prompt
+
 from app.rag.embedding import get_embedding
 from app.rag.vector_store import search_chunks
 from app.rag.prompt_builder import build_prompt
@@ -8,11 +10,15 @@ def run_rag_pipeline(question: str):
   
     question_embedding = get_embedding(question)
 
-    results = search_chunks(question_embedding)
+    search_results = search_chunks(question_embedding)
     
-    results = results['documents'][0]
 
-    prompt = build_prompt(question=question, results=results)
+    documents = search_results["documents"][0]
+
+    prompt = build_prompt(
+        question=question,
+        retrieved_chunks=documents
+    )
 
     answer = generate_answer(prompt)
 

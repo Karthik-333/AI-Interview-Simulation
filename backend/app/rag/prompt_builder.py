@@ -4,18 +4,18 @@ def build_prompt(question: str, retrieved_chunks: list[str]):
 
     prompt = f"""You are an AI interview assistant.
     
-Answer ONLY using the context below.
+            Answer ONLY using the context below.
 
-If the answer is not present in the context,
-say "I don't have enough information."
+            If the answer is not present in the context,
+            say "I don't have enough information."
 
-Context:
-{context}
+            Context:
+            {context}
 
-Question:
-{question}
+            Question:
+            {question}
 
-Answer:
-"""
+            Answer:
+            """
 
     return prompt

@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 from app.schemas.interview import InterviewRequest, User
 from app.services.interview_service import start_interview
+from app.schemas.interview import InterviewQuestionRequest, InterviewQuestionResponse
+from app.services.interview_service import ask_question
 
 router = APIRouter()
 
@@ -29,3 +31,7 @@ def get_user(user_id: int):
     return {
         "user_id": user_id
     }
+@router.post("/interview/ask")
+def interview_ask(request: InterviewQuestionRequest):
+    answer = ask_question(request.question)
+    return InterviewQuestionResponse(answer=answer)

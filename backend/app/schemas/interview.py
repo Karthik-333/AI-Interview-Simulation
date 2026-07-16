@@ -5,3 +5,7 @@ class InterviewRequest(BaseModel):
 class User(BaseModel):
     name: str
     age: int
+class InterviewQuestionRequest(BaseModel):
+    question: str
+class InterviewQuestionResponse(BaseModel):
+    answer: str        
