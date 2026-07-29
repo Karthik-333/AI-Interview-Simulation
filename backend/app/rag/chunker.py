@@ -1,2 +1,17 @@
-def chunk_text(text: str):
-    return text.split("\n")
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+
+def chunk_text(
+    text: str,
+    chunk_size: int = 500,
+    overlap: int = 100,
+) -> list[str]:
+
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=overlap,
+    )
+
+    chunks = splitter.split_text(text)
+
+    return chunks
