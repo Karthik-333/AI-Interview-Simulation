@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel
 
 class InterviewRequest(BaseModel):
@@ -7,5 +8,6 @@ class User(BaseModel):
     age: int
 class InterviewQuestionRequest(BaseModel):
     question: str
+    session_id: Optional[int] = None
 class InterviewQuestionResponse(BaseModel):
     answer: str        

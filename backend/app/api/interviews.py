@@ -33,5 +33,5 @@ def get_user(user_id: int):
     }
 @router.post("/interview/ask")
 def interview_ask(request: InterviewQuestionRequest):
-    answer = ask_question(request.question)
+    answer = ask_question(request.question, session_id=request.session_id)
     return InterviewQuestionResponse(answer=answer)

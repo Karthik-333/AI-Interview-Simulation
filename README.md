@@ -6,7 +6,7 @@ An AI-powered interview simulation platform that generates personalized intervie
 
 ## 🚀 Current Status
 
-**Project Stage:** Phase 4 - Production AI Backend (In Progress)
+**Project Stage:** Phase 4 - LangChain (In Progress)
 
 ### ✅ Completed
 
@@ -27,22 +27,19 @@ An AI-powered interview simulation platform that generates personalized intervie
 - ✅ Phase 1 — Backend Foundations
 - ✅ Phase 2 — Database & Architecture
 - ✅ Phase 3 — Build RAG From Scratch
-- 🚧 Phase 4 — Production AI Backend
+- ✅ Phase 4 — Production AI Backend
 - ⏳ Phase 5 — LangChain
-- ⏳ Phase 6 — LlamaIndex
+- ⏳ Phase 6 — LangGraph
 - ⏳ Phase 7 — AI Agents & MCP
-- ⏳ Phase 8 — Deployment
-
-### 🚧 In Progress
-
-- Interview Question API
-- Prompt Pipeline
-- Streamlit Frontend
+- ⏳ Phase 8 — Auth, Security, Login
+- ⏳ Phase 9 — Streamlit
+- ⏳ Phase 10 — Deployment
 
 ### 📅 Planned
 
 - LangChain Integration
-- LlamaIndex Integration
+- LangGraph Integration
+- Streamlit Dashboard and UI/UX
 - MLflow
 - Docker
 - Deployment
@@ -110,7 +107,7 @@ Answer
 ### Future
 
 - LangChain
-- LlamaIndex
+- LangGraph
 - Streamlit
 - Docker
 - MLflow
@@ -153,4 +150,4 @@ backend/
 
 This project is being built from scratch to understand every component of a production-grade AI Engineering system instead of relying on high-level frameworks from the beginning.
 
-The project will later be migrated to LangChain and LlamaIndex to understand what those frameworks abstract internally.
+The project will later be migrated to LangChain and LangGraph to understand what those frameworks abstract internally.

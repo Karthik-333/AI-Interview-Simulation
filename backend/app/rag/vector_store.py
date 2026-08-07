@@ -13,21 +13,19 @@ def store_chunks(chunks, embeddings):
 
         collection.add(
             ids=[str(i)],
-
             documents=[chunk],
-
-            embeddings=[embeddings[i].tolist()],
-
+            embeddings=[embeddings[i]],
             metadatas=[
                 {
                     "source": "resume"
                 }
             ]
         )
+
 def search_chunks(query_embedding):
 
     results = collection.query(
-        query_embeddings=[query_embedding.tolist()],
+        query_embeddings=[query_embedding],
         n_results=2
     )
 
