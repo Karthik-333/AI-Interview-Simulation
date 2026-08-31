@@ -1,0 +1,42 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/chroma_db:/app/backend/chroma_db
+      - ./backend/uploads:/app/backend/uploads
+      - ./dev.db:/app/dev.db
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./dev.db}
+      LLM_MODEL: ${LLM_MODEL:-llama3.2}
+      CHROMA_DB_PATH: ${CHROMA_DB_PATH:-/app/backend/chroma_db}
+    # Uncomment to use Ollama container (requires pulling model separately)
+    # depends_on:
+    #   - ollama
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      BACKEND_URL: http://api:8000
+    depends_on:
+      - api
+
+  # Optional: local Ollama (uncomment to enable; then run `docker exec <ollama> ollama pull llama3.2`)
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+
+# volumes:
+#   ollama_data:

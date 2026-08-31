@@ -1,34 +1,16 @@
-# from pypdf import PdfReader
-from langchain_community.document_loaders import PyPDFLoader
+try:
+    from langchain_community.document_loaders import PyPDFLoader
+except ImportError:  # pragma: no cover - fallback for lean environments
+    PyPDFLoader = None
 
 
 def extract_text_from_pdf(file_path: str) -> str:
+    if PyPDFLoader is not None:
+        loader = PyPDFLoader(file_path)
+        documents = loader.load()
+        return "\n".join(doc.page_content for doc in documents)
 
-    loader = PyPDFLoader(file_path)
-    documents = loader.load()
-    text = "\n".join(doc.page_content for doc in documents)
-    return text
+    from pypdf import PdfReader
 
-    # reader = PdfReader(file_path)
-
-    # text = ""
-
-    # for page in reader.pages:
-
-    #     text += page.extract_text() + "\n"
-
-    # return text
-
-# from pypdf import PdfReader
-# def extract_text_from_pdf(file_path: str):
-
-#     reader = PdfReader(file_path)
-
-#     text = ""
-
-#     for page in reader.pages:
-
-#         text += page.extract_text() + "\n"
-
-#     return text
-# print(extract_text_from_pdf("/home/karthik/Downloads/Karthik_S_Resume.pdf"))
+    reader = PdfReader(file_path)
+    return "\n".join(page.extract_text() or "" for page in reader.pages)

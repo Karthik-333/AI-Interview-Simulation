@@ -2,7 +2,7 @@ from app.core.database import engine
 from app.models.base import Base
 
 # Import models so SQLAlchemy knows they exist
-from app.models.interview import InterviewSession
+import app.models  # noqa: F401 - ensures all tables are registered
 
 
 Base.metadata.create_all(bind=engine)

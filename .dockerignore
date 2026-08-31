@@ -1,0 +1,12 @@
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.git
+.gitignore
+.idea
+dev.db
+backend/chroma_db
+backend/uploads
+source
+frontend/__pycache__
