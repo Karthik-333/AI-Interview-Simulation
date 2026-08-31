@@ -1,200 +1,202 @@
 # AI Interview Simulation
 
-An AI-powered interview simulation platform that generates personalized interview questions and answers based on the candidate's resume using Retrieval-Augmented Generation (RAG) and Large Language Models (LLMs).
+An AI-powered interview simulation platform that generates personalized interview questions, evaluates candidate responses, and supports authenticated interview sessions using a FastAPI backend and a modern React frontend.
 
 ---
 
 ## 🚀 Current Status
 
-**Project Stage:** Phase 10 — Deployment (All Phases Complete)
+**Project Stage:** Production-ready frontend + backend interview platform
 
 ### ✅ Completed
 
-- FastAPI Backend + CORS
-- SQLAlchemy ORM (SQLite default, PostgreSQL-ready via `DATABASE_URL`, `users` + `interview_sessions` with `user_id` FK)
-- Resume PDF Processing + Upload API (`POST /resume/upload_resume`)
-- Text Chunking, SentenceTransformer Embeddings (all-MiniLM-L6-v2), ChromaDB, Semantic Search
-- Ollama Integration (Llama 3.2) with offline heuristic fallback
-- RAG Ingestion Pipeline + LangChain Components + LangGraph RAG Pipeline (retrieve → compose → generate)
-- LangGraph Interview Flow (`POST /interview/start` → `POST /interview/answer` → `GET /interview/session/{id}`; 0–10 avg scoring, adaptive follow-ups)
-- AI Agents & MCP (`GET /mcp/tools`, `POST /mcp/call`, `POST /agent/interview/*`; `app.mcp` + `app.agents` via LangGraph)
-- Auth & Security (`POST /auth/register`, `POST /auth/login`, `GET /auth/me`; JWT via PyJWT, pbkdf2, optional `REQUIRE_AUTH`)
-- Streamlit Dashboard (`frontend/app.py`: upload, auth, start, answer, history, score; `BACKEND_URL` env)
-- Deployment (`Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml`, `.dockerignore`)
-
-## 📈 Development Progress
-
-- ✅ Phase 1 — Backend Foundations
-- ✅ Phase 2 — Database & Architecture
-- ✅ Phase 3 — Build RAG From Scratch
-- ✅ Phase 4 — Production AI Backend
-- ✅ Phase 5 — LangChain
-- ✅ Phase 6 — LangGraph
-- ✅ Phase 7 — AI Agents & MCP
-- ✅ Phase 8 — Auth, Security, Login
-- ✅ Phase 9 — Streamlit
-- ✅ Phase 10 — Deployment
-
-### 📅 Planned (next)
-
-- PostgreSQL Migration (prod)
-- MLflow Experiment Tracking
-- Observability / Rate Limiting
-- E2E Tests & CI
+- FastAPI backend with CORS and modular route/service architecture
+- SQLAlchemy ORM with SQLite default and PostgreSQL-ready configuration
+- Resume upload + PDF ingestion pipeline for semantic interview grounding
+- RAG-based question answering and interview session orchestration
+- LangGraph/LangChain-backed interview flow with fallback heuristics
+- Auth and security layer with register/login/me endpoints and JWT support
+- Modern React + TypeScript + Vite frontend with Tailwind CSS
+- shadcn/ui-inspired component system for production-style UI
+- React Query for API data fetching, React Hook Form for forms, Zustand for frontend state
+- Deployment-ready Docker configuration and environment setup
 
 ---
 
-## 🏗️ Project Architecture
+## 🏗️ Architecture
 
-```
-User Upload Resume
-        │
-        ▼
-FastAPI Upload API
-        │
-        ▼
-Resume Service
-        │
-        ▼
-RAG Ingestion Pipeline
-        │
-        ▼
-ChromaDB
-```
-
-Current Question Answering Flow (LangGraph)
-
-```
-User Question
-      │
-      ▼
-LangGraph StateGraph
-  ├─ retrieve_context   → Embedding + Semantic Search
-  ├─ compose_prompt     → Prompt Construction
-  └─ generate           → Llama 3.2
-      │
-      ▼
-Answer
+```text
+User
+ │
+ ▼
+React + Vite Frontend
+ │
+ ▼
+FastAPI Backend
+ │
+ ├─ Resume API
+ ├─ Auth API
+ ├─ Interview API
+ ├─ RAG / vector retrieval
+ └─ LangGraph orchestration
+ │
+ ▼
+Resume + vector store + interview evaluation pipeline
 ```
 
-Interviewer Flow (LangGraph)
+### Interview flow
 
-```
-Start Session
-      │
-      ▼
-Generate Opening Question (from resume context)
-      │
-      ▼
-Candidate Submits Answer
-      │
-      ▼
-Evaluate Answer (LLM rubric, 0-10) + Follow-up Question
-      │
-      ▼
-Update Session Score (average) → Next Turn
+```text
+Start session
+  │
+  ▼
+Generate opening question from resume context
+  │
+  ▼
+Candidate submits answer
+  │
+  ▼
+Evaluate answer (score + strengths + weaknesses)
+  │
+  ▼
+Generate next question / follow-up
+  │
+  ▼
+Persist session history and score
 ```
 
 ---
 
 ## 🛠️ Tech Stack
 
+### Frontend
+
+- React 18
+- TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui-inspired components
+- React Query
+- React Hook Form
+- Zustand
+
 ### Backend
 
 - Python
 - FastAPI
 - SQLAlchemy
-- PostgreSQL
-
-### AI / GenAI
-
-- Sentence Transformers
+- JWT auth
 - ChromaDB
-- Ollama
-- Llama 3.2
-
-### Future
-
-- LangChain
-- LangGraph
-- Streamlit
-- Docker
-- MLflow
+- Sentence Transformers
+- LangChain / LangGraph
+- Ollama integration with offline fallback
 
 ---
 
 ## 📂 Project Structure
 
 ```text
-backend/
-│
-├── app/
-│   ├── api/            # FastAPI routers (interviews, resume, auth, mcp, agents)
-│   ├── services/       # Business logic (interview, resume, auth)
-│   ├── rag/            # Ingestion + LangGraph RAG + interview_graph + prompt_builder
-│   ├── mcp/            # MCP tools + server (model-context-protocol)
-│   ├── agents/         # Interview agent (LangGraph)
-│   ├── schemas/        # Pydantic models
-│   ├── models/         # SQLAlchemy ORM (User, InterviewSession)
-│   ├── core/           # Settings + database + security (JWT)
-│   └── data/           # Sample resume
-│
-├── tests/              # Pytest suite (conftest.py adds app/ to sys.path)
-├── uploads/            # Uploaded resumes (gitignored)
-├── chroma_db/          # Persistent ChromaDB store (gitignored)
-└── .env.example        # Copy to .env — loaded via python-dotenv
-
-frontend/
-├── app.py              # Streamlit dashboard
-└── requirements.txt
-
-Dockerfile               # Backend (FastAPI)
-frontend/Dockerfile      # Streamlit
-docker-compose.yml
+.
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   ├── core/
+│   │   ├── models/
+│   │   ├── rag/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   ├── agents/
+│   │   ├── mcp/
+│   │   ├── data/
+│   │   ├── main.py
+│   │   └── init_db.py
+│   ├── tests/
+│   ├── uploads/
+│   └── chroma_db/
+├── frontend/
+│   ├── src/
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.js
+│   ├── postcss.config.js
+│   └── .env.example
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── pytest.ini
+├── README.md
+└── .gitignore
 ```
 
-Run tests from the repo root:
+---
+
+## 🔧 Local Development
+
+### Backend
 
 ```bash
+cd /home/karthik/Projects/AI-Interview-Simulation-v2
+pip install -r requirements.txt
+python backend/app/init_db.py
+uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Frontend
+
+```bash
+cd /home/karthik/Projects/AI-Interview-Simulation-v2/frontend
+npm install
+cp .env.example .env
+npm run dev
+```
+
+Frontend runs on:
+
+- http://localhost:5173
+
+Backend runs on:
+
+- http://localhost:8000
+
+API docs:
+
+- http://localhost:8000/docs
+
+---
+
+## 🧪 Testing
+
+```bash
+cd /home/karthik/Projects/AI-Interview-Simulation-v2
 pytest backend/tests -q
-```
-
-Run locally:
-
-```bash
-# backend
-uvicorn app.main:app --app-dir backend --port 8000
-# frontend
-BACKEND_URL=http://127.0.0.1:8000 streamlit run frontend/app.py --server.port 8501
-```
-
-Docker:
-
-```bash
-docker compose up --build
-# api: http://localhost:8000  streamlit: http://localhost:8501  docs: http://localhost:8000/docs
 ```
 
 ---
 
 ## 📌 Features Implemented
 
-- Upload Resume PDF + ingested chunks
-- RAG Q&A (`POST /interview/ask`) and Interviewer Flow (`POST /interview/start`, `POST /interview/answer`)
-- Generate Opening Interview Question From Resume (LLM + heuristic fallback)
-- Evaluate Candidate Answers (LLM rubric 0–10 + strengths/weaknesses/feedback; offline fallback)
-- Adaptive Follow-up Questions (LLM + template fallback; deduped via history)
-- Session Score = rounded average (0–10) + full history (`GET /interview/session/{id}`)
-- Auth (register/login/me, JWT, pbkdf2, optional ownership enforcement)
-- MCP Tools (`resume_search`, `interview_start`, `interview_answer`, `interview_get`, `follow_up_hint`) via `GET /mcp/tools` + `POST /mcp/call` and stdio `python -m app.mcp.server`
-- Interview Agent (LangGraph, `POST /agent/interview/*`) orchestrating via MCP tools
-- Streamlit UI (upload, auth, interview loop, history, score, MCP explorer)
-- Docker + Compose (api + streamlit; optional Ollama)
+- Upload and ingest resume PDFs
+- Personalized interview question generation from resume context
+- Candidate answer evaluation with score, strengths, and weaknesses
+- Adaptive follow-up question generation
+- Persistent interview session tracking and score history
+- Authentication support for interview workflows
+- Production-oriented frontend dashboard experience
+- Backend API integration with FastAPI and modern React UI
 
 ---
 
-## 📖 Learning Goal
+## 🚢 Docker / Deployment
 
-This project is being built from scratch to understand every component of a production-grade AI Engineering system instead of relying on high-level frameworks from the beginning.
+```bash
+docker compose up --build
+```
 
-The project will later be migrated to LangChain and LangGraph to understand what those frameworks abstract internally.
+This brings up the API and frontend services together for local deployment testing.
+
+---
+
+## 📖 Notes
+
+The system is designed as a practical AI engineering project combining retrieval, interview logic, model orchestration, and production-facing UX. The frontend has been modernized to a React-based stack to better align with production application expectations while preserving the backend interview capabilities.

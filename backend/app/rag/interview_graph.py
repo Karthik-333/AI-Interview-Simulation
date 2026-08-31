@@ -28,7 +28,7 @@ class InterviewState(TypedDict, total=False):
 
 def _retrieve_chunks(query: str, n_results: int = DEFAULT_RETRIEVAL) -> list[str]:
     embedding = get_query_embedding(query)
-    results = search_chunks(embedding, n_results=n_results)
+    results = search_chunks(embedding, n_results=n_results, query=query)
     documents = results.get("documents") or [[]]
     return documents[0] if documents else []
 
@@ -143,10 +143,14 @@ def run_evaluation(question: str, candidate_answer: str) -> dict | None:
     evaluation = result.get("evaluation")
     if not evaluation:
         return None
+    dimensions = evaluation.get("dimensions") or {}
+    score = max(0, min(10, int(evaluation.get("score", 0))))
     return {
-        "score": int(evaluation.get("score", 0)),
+        "score": score,
         "strengths": evaluation.get("strengths", []),
         "weaknesses": evaluation.get("weaknesses", []),
         "feedback": evaluation.get("feedback", ""),
+        "dimensions": dimensions,
+        "factuality": evaluation.get("factuality", {}),
         "next_question": result.get("next_question", ""),
     }

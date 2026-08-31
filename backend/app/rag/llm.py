@@ -1,7 +1,11 @@
 import json
 import re
+import logging
+import time
 
-from app.core.settings import LLM_MODEL
+from app.core.settings import LLM_MAX_RETRIES, LLM_MODEL, LLM_RETRY_BASE_SECONDS
+
+logger = logging.getLogger(__name__)
 
 try:
     from langchain_ollama import ChatOllama
@@ -20,16 +24,25 @@ LLM_AVAILABLE = chat_model is not None or ollama is not None
 
 
 def generate_answer(prompt: str):
-    if chat_model is not None:
-        response = chat_model.invoke(prompt)
-        return response.content
-
-    if ollama is not None:
-        response = ollama.chat(
-            model=LLM_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response["message"]["content"]
+    """Generate text with bounded exponential backoff for transient failures."""
+    last_error = None
+    for attempt in range(LLM_MAX_RETRIES + 1):
+        try:
+            if chat_model is not None:
+                response = chat_model.invoke(prompt)
+                return response.content
+            if ollama is not None:
+                response = ollama.chat(model=LLM_MODEL, messages=[{"role": "user", "content": prompt}])
+                return response["message"]["content"]
+            break
+        except Exception as exc:
+            last_error = exc
+            if attempt >= LLM_MAX_RETRIES:
+                logger.warning("llm_call_failed", exc_info=True)
+                break
+            time.sleep(LLM_RETRY_BASE_SECONDS * (2**attempt))
+    if last_error is not None:
+        return ""
 
     return prompt
 

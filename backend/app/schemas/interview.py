@@ -1,11 +1,11 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class InterviewRequest(BaseModel):
-    user_name: str
+    user_name: str = Field(min_length=1, max_length=120)
 
 
 class InterviewStartResponse(BaseModel):
@@ -16,7 +16,7 @@ class InterviewStartResponse(BaseModel):
 
 class AnswerSubmissionRequest(BaseModel):
     session_id: int
-    answer: str
+    answer: str = Field(min_length=1, max_length=20_000)
 
 
 class AnswerEvaluationResponse(BaseModel):
@@ -26,10 +26,12 @@ class AnswerEvaluationResponse(BaseModel):
     weaknesses: list[str]
     next_question: str
     current_score: int
+    dimensions: dict[str, float] = Field(default_factory=dict)
+    factuality: dict = Field(default_factory=dict)
 
 
 class InterviewQuestionRequest(BaseModel):
-    question: str
+    question: str = Field(min_length=1, max_length=2_000)
     session_id: Optional[int] = None
 
 
@@ -50,6 +52,8 @@ class InterviewHistoryEntry(BaseModel):
     score_delta: Optional[int] = None
     evaluation: str
     next_question: Optional[str] = None
+    dimensions: Optional[dict[str, float]] = None
+    audio_path: Optional[str] = None
 
 
 class InterviewSessionResponse(BaseModel):

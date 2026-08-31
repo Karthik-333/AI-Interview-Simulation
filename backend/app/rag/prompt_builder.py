@@ -49,13 +49,12 @@ def build_evaluation_prompt(question: str, candidate_answer: str, resume_chunks:
     prompt = f"""You are a hiring manager evaluating a candidate's interview answer
     against their resume.
 
-    Score the answer from 0 to 10 based on:
-    - Relevance to the question asked
-    - Whether it aligns with the resume context
-    - Depth, specificity, and clarity
+    Score the answer from 0 to 10 using these four equally important dimensions:
+    technical_depth, communication, problem_solving, and domain_expertise.
+    Also assess factuality against the resume and never reward unsupported claims.
 
     Return your evaluation as strict JSON with exactly these keys:
-    {{"score": <int 0-10>, "strengths": [<string>], "weaknesses": [<string>], "feedback": <string>}}
+    {{"score": <int 0-10>, "dimensions": {{"technical_depth": <0-10>, "communication": <0-10>, "problem_solving": <0-10>, "domain_expertise": <0-10>}}, "factuality": {{"is_supported": <bool>, "notes": <string>}}, "strengths": [<string>], "weaknesses": [<string>], "feedback": <string>}}
 
     Resume context:
     {context}
@@ -98,6 +97,9 @@ def build_follow_up_prompt(
 
     Evaluation feedback:
     {evaluation.get("feedback", "")}
+
+    Adapt difficulty to performance: ask for clarification if weak, a concrete
+    implementation example if developing, or trade-offs and edge cases if strong.
 
     Next question:
     """

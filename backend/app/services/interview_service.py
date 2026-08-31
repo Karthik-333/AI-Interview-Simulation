@@ -4,8 +4,10 @@ from collections import Counter
 from datetime import datetime, timezone
 
 from app.core.database import SessionLocal
-from app.models.interview import InterviewSession
+from app.models.interview import AuditLog, InterviewSession
 from app.rag.pipeline import run_rag_pipeline
+from app.services.scoring_service import analyze_response, score_answer
+from app.api.webhooks import notify
 
 try:
     from app.rag.interview_graph import run_evaluation, run_question_generation
@@ -70,13 +72,14 @@ def generate_follow_up_question(question: str, answer: str, history: list[dict] 
     recent_questions = Counter(_extract_topic(entry.get("question", "")) for entry in history[-3:])
     repeated_topic = recent_questions.most_common(1)[0][0] if recent_questions else None
 
+    response_kind = analyze_response(answer)
     if INSUFFICIENT_CONTEXT_PHRASE in (answer or "").lower():
         return f"Could you narrow down what you mean by {topic}?"
 
     if any(phrase in (answer or "").lower() for phrase in UNCERTAINTY_PHRASES):
         return f"Can you walk me through a concrete example of {topic}?"
 
-    if len((answer or "").split()) >= 40:
+    if response_kind == "detailed":
         if repeated_topic and repeated_topic != "this topic":
             return f"What trade-offs would you consider next for {repeated_topic}?"
         return f"What trade-offs or edge cases would you consider next for {answer_topic}?"
@@ -88,24 +91,23 @@ def generate_follow_up_question(question: str, answer: str, history: list[dict] 
 
 def start_interview(user_name: str, user_id: int | None = None):
     db = SessionLocal()
-    interview = InterviewSession(
-        user_name=user_name,
-        user_id=user_id,
-        score=0,
-        history="[]",
-    )
+    try:
+        interview = InterviewSession(user_name=user_name, user_id=user_id, score=0, history="[]")
+        db.add(interview)
+        db.commit()
+        db.refresh(interview)
+        session_id = interview.id
 
-    db.add(interview)
-    db.commit()
-    db.refresh(interview)
-    session_id = interview.id
-
-    first_question = run_question_generation(user_name)
-    if not first_question:
-        first_question = _fallback_first_question(user_name)
-    interview.current_question = first_question
-    db.commit()
+        first_question = run_question_generation(user_name) or _fallback_first_question(user_name)
+        interview.current_question = first_question
+        db.add(AuditLog(event_type="interview_started", session_id=interview.id, actor_id=user_id, payload=json.dumps({"user_name": user_name})))
+        db.commit()
+    except Exception:
+        db.rollback()
+        db.close()
+        raise
     db.close()
+    notify("interview_started", {"session_id": session_id, "user_name": user_name})
 
     return {
         "session_id": session_id,
@@ -138,6 +140,7 @@ def ask_question(question: str, session_id: int | None = None):
                 }
             )
             session.history = json.dumps(history)
+            db.add(AuditLog(event_type="answer_recorded", session_id=session.id, payload=json.dumps({"evaluation": evaluation, "score_delta": score_delta})))
             # keep legacy additive for backward compat, but also ensure score reflects average if needed
             session.score = (session.score or 0) + score_delta
             db.commit()
@@ -148,6 +151,7 @@ def ask_question(question: str, session_id: int | None = None):
     else:
         current_score = None
 
+    rubric = score_answer(answer, question)
     return {
         "answer": answer,
         "evaluation": evaluation,
@@ -155,6 +159,8 @@ def ask_question(question: str, session_id: int | None = None):
         "next_question": next_question,
         "session_id": session_id,
         "current_score": current_score,
+        "dimensions": rubric["dimensions"],
+        "factuality": rubric["factuality"],
     }
 
 
@@ -174,11 +180,14 @@ def _heuristic_evaluation(answer: str) -> dict:
     else:
         score = 7
         feedback = "The answer was concise."
+    rubric = score_answer(answer)
     return {
         "score": score,
         "strengths": [] if score == 0 else [feedback],
         "weaknesses": [] if score >= 5 else [feedback],
         "feedback": feedback,
+        "dimensions": rubric["dimensions"],
+        "factuality": rubric["factuality"],
     }
 
 
@@ -219,46 +228,45 @@ def _next_question_fallback(question: str, answer: str) -> str:
     return generate_follow_up_question(question, answer)
 
 
-def submit_answer(session_id: int, answer: str):
+def submit_answer(session_id: int, answer: str, audio_path: str | None = None):
     db = SessionLocal()
-    session = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
-    if not session:
+    try:
+        session = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
+        if not session:
+            return None
+
+        question = session.current_question or _extract_topic(answer)
+
+        evaluation = run_evaluation(question, answer)
+        if evaluation is None:
+            evaluation = _heuristic_evaluation(answer)
+            next_question = _next_question_fallback(question, answer)
+        else:
+            next_question = evaluation.get("next_question") or _next_question_fallback(question, answer)
+
+        score = evaluation["score"]
+
+        history = _parse_history(session.history)
+        prior_context = [entry.get("answer", "") for entry in history[-4:]]
+        evaluation.setdefault("dimensions", score_answer(answer, question, prior_context)["dimensions"])
+        history_entry = {"question": question, "answer": answer, "timestamp": datetime.now(timezone.utc).isoformat(), "score": score, "score_delta": None, "evaluation": evaluation["feedback"], "next_question": next_question, "dimensions": evaluation["dimensions"]}
+        if audio_path:
+            history_entry["audio_path"] = audio_path
+        history.append(history_entry)
+        session.history = json.dumps(history)
+
+        scores = [_normalize_score(e) for e in history]
+        current_score = round(sum(scores) / len(scores)) if scores else 0
+        session.score = current_score
+        session.current_question = next_question
+        db.add(AuditLog(event_type="answer_submitted", session_id=session.id, payload=json.dumps({"score": score, "response_kind": analyze_response(answer)})))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
         db.close()
-        return None
-
-    question = session.current_question
-    if not question:
-        question = _extract_topic(answer)
-
-    evaluation = run_evaluation(question, answer)
-    if evaluation is None:
-        evaluation = _heuristic_evaluation(answer)
-        next_question = _next_question_fallback(question, answer)
-    else:
-        next_question = evaluation.get("next_question") or _next_question_fallback(question, answer)
-
-    score = evaluation["score"]
-
-    history = _parse_history(session.history)
-    history.append(
-        {
-            "question": question,
-            "answer": answer,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "score": score,
-            "score_delta": None,
-            "evaluation": evaluation["feedback"],
-            "next_question": next_question,
-        }
-    )
-    session.history = json.dumps(history)
-
-    scores = [_normalize_score(e) for e in history]
-    current_score = round(sum(scores) / len(scores)) if scores else 0
-    session.score = current_score
-    session.current_question = next_question
-    db.commit()
-    db.close()
+    notify("answer_submitted", {"session_id": session_id, "score": score})
 
     return {
         "score": score,
@@ -289,6 +297,8 @@ def get_interview_session(session_id: int):
             entry["score_delta"] = None
         if "next_question" not in entry:
             entry["next_question"] = None
+        if "audio_path" not in entry:
+            entry["audio_path"] = None
 
     payload = {
         "session_id": session.id,

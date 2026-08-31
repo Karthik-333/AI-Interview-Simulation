@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 try:
     from langchain_huggingface import HuggingFaceEmbeddings
 except ImportError:  # pragma: no cover - fallback for lean environments
@@ -32,6 +34,7 @@ def get_document_embeddings(chunks: list[str]) -> list[list[float]]:
     return embeddings.embed_documents(chunks)
 
 
+@lru_cache(maxsize=512)
 def get_query_embedding(question: str) -> list[float]:
     return embeddings.embed_query(question)
 

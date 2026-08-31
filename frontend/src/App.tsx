@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { VoiceInterview } from '@/components/VoiceInterview'
 import { authApi, interviewApi, resumeApi } from '@/lib/api'
 import { useAppStore } from '@/lib/store'
 
@@ -244,6 +245,8 @@ function App() {
                 )}
               </CardContent>
             </Card>
+
+            <VoiceInterview sessionId={sessionId} backendUrl={useAppStore.getState().backendUrl} />
 
             <Card>
               <CardHeader>
