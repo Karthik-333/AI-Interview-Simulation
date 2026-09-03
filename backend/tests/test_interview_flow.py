@@ -21,7 +21,7 @@ def test_start_interview_returns_first_question(monkeypatch):
     monkeypatch.setattr(
         interview_service,
         "run_question_generation",
-        lambda user_name: "Tell me about your FastAPI experience.",
+        lambda user_name, session_id=None, **kwargs: "Tell me about your FastAPI experience.",
     )
 
     result = interview_service.start_interview("Karthik")
@@ -34,17 +34,16 @@ def test_submit_answer_evaluates_persists_and_scores_average(monkeypatch):
     monkeypatch.setattr(
         interview_service,
         "run_question_generation",
-        lambda user_name: "First question?",
+        lambda user_name, session_id=None, **kwargs: "First question?",
     )
     monkeypatch.setattr(
         interview_service,
         "run_evaluation",
-        lambda question, answer: {
+        lambda question, answer, plan=None, **kwargs: {
             "score": 8,
             "strengths": ["Clear explanation"],
             "weaknesses": [],
             "feedback": "Good depth.",
-            "next_question": "What trade-offs did you face?",
         },
     )
 
@@ -53,12 +52,12 @@ def test_submit_answer_evaluates_persists_and_scores_average(monkeypatch):
 
     assert result["score"] == 8
     assert result["evaluation"] == "Good depth."
-    assert result["next_question"] == "What trade-offs did you face?"
+    assert result["next_question"]  # should exist after generation
     assert result["current_score"] == 8
 
     db = TestSessionLocal()
     session = db.query(InterviewSession).first()
-    assert session.current_question == "What trade-offs did you face?"
+    assert session.current_question == result["next_question"]
     assert session.score == 8
     history = json.loads(session.history)
     assert history[0]["question"] == "First question?"
@@ -71,17 +70,16 @@ def test_submit_answer_averages_multiple_scores(monkeypatch):
     monkeypatch.setattr(
         interview_service,
         "run_question_generation",
-        lambda user_name: "Q1?",
+        lambda user_name, session_id=None, **kwargs: "Q1?",
     )
     monkeypatch.setattr(
         interview_service,
         "run_evaluation",
-        lambda question, answer: {
+        lambda question, answer, plan=None, **kwargs: {
             "score": 10,
             "strengths": [],
             "weaknesses": [],
             "feedback": "Strong.",
-            "next_question": "Next?",
         },
     )
 
@@ -99,8 +97,8 @@ def test_submit_answer_averages_multiple_scores(monkeypatch):
 
 def test_submit_answer_uses_heuristic_fallback_when_llm_absent(monkeypatch):
     TestSessionLocal = _test_db(monkeypatch)
-    monkeypatch.setattr(interview_service, "run_question_generation", lambda user_name: None)
-    monkeypatch.setattr(interview_service, "run_evaluation", lambda question, answer: None)
+    monkeypatch.setattr(interview_service, "run_question_generation", lambda user_name, session_id=None, **kwargs: None)
+    monkeypatch.setattr(interview_service, "run_evaluation", lambda question, answer, plan=None, **kwargs: None)
 
     start = interview_service.start_interview("Karthik")
     # fallback question when LLM unavailable (offline mode)

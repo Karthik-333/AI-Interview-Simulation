@@ -13,6 +13,7 @@ from app.core.settings import API_VERSION, RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDO
 from app.api.agents import router as agent_router
 from app.api.auth import router as auth_router
 from app.api.interviews import router as interview_router
+from app.api.job_description import router as job_description_router
 from app.api.mcp import router as mcp_router
 from app.api.resume import router as resume_router
 from app.api.tasks import router as tasks_router
@@ -65,6 +66,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(interview_router)
+app.include_router(job_description_router)
 app.include_router(resume_router)
 app.include_router(mcp_router)
 app.include_router(agent_router)
@@ -73,6 +75,7 @@ app.include_router(webhook_router)
 app.include_router(voice_router)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(interview_router, prefix="/api/v1")
+app.include_router(job_description_router, prefix="/api/v1")
 app.include_router(resume_router, prefix="/api/v1")
 app.include_router(mcp_router, prefix="/api/v1")
 app.include_router(agent_router, prefix="/api/v1")

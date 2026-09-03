@@ -62,13 +62,12 @@ def test_audio_path_is_retrievable_from_persisted_session_history(monkeypatch):
     test_session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
     monkeypatch.setattr(interview_service, "SessionLocal", test_session)
-    monkeypatch.setattr(interview_service, "run_question_generation", lambda name: "Question?")
-    monkeypatch.setattr(interview_service, "run_evaluation", lambda question, answer: {
+    monkeypatch.setattr(interview_service, "run_question_generation", lambda name, session_id=None, **kwargs: "Question?")
+    monkeypatch.setattr(interview_service, "run_evaluation", lambda question, answer, plan=None, **kwargs: {
         "score": 8,
         "strengths": [],
         "weaknesses": [],
         "feedback": "Good.",
-        "next_question": "Next?",
     })
 
     started = interview_service.start_interview("Candidate")
@@ -76,3 +75,4 @@ def test_audio_path_is_retrievable_from_persisted_session_history(monkeypatch):
     session = interview_service.get_interview_session(started["session_id"])
 
     assert session["history"][0]["audio_path"] == "10/1.wav"
+

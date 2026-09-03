@@ -10,14 +10,17 @@ from app.services.scoring_service import analyze_response, score_answer
 from app.api.webhooks import notify
 
 try:
-    from app.rag.interview_graph import run_evaluation, run_question_generation
+    from app.rag.interview_graph import run_evaluation, run_question_generation, run_next_question_generation
 except ImportError:  # pragma: no cover - fallback when LangGraph is unavailable
 
-    def run_question_generation(user_name=None):  # type: ignore[no-redef]
+    def run_question_generation(user_name=None, **kwargs):  # type: ignore[no-redef]
         return None
 
-    def run_evaluation(question, answer):  # type: ignore[no-redef]
+    def run_evaluation(question, answer, **kwargs):  # type: ignore[no-redef]
         return None
+
+    def run_next_question_generation(question, candidate_answer, **kwargs):  # type: ignore[no-redef]
+        return ""
 
 INSUFFICIENT_CONTEXT_PHRASE = "don't have enough information"
 UNCERTAINTY_PHRASES = (
@@ -51,6 +54,42 @@ def _extract_topic(text: str) -> str:
     return " ".join(words[:3])
 
 
+def _parse_session_plan(raw_plan: str | None) -> list[dict]:
+    if not raw_plan:
+        return []
+    try:
+        data = json.loads(raw_plan)
+    except Exception:
+        return []
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if isinstance(data, dict):
+        sections = data.get("sections") if isinstance(data.get("sections"), list) else []
+        return [item for item in sections if isinstance(item, dict)]
+    return []
+
+
+def _plan_section_for_session(session: InterviewSession | None):
+    if not session:
+        return None, 0
+    plan = _parse_session_plan(session.plan)
+    if not plan:
+        return None, 0
+    index = max(0, min(int(session.current_section_index or 0), len(plan) - 1))
+    return plan[index], index
+
+
+def _answer_matches_expectation(answer: str, expectation: str) -> bool:
+    if not expectation:
+        return False
+    candidate = (answer or "").lower()
+    target = expectation.lower()
+    tokens = set(re.findall(r"[a-z0-9]+", target))
+    if not tokens:
+        return False
+    return any(token in candidate for token in tokens)
+
+
 def evaluate_answer(answer: str) -> tuple[int, str]:
     normalized = (answer or "").strip().lower()
     if not normalized or INSUFFICIENT_CONTEXT_PHRASE in normalized:
@@ -65,12 +104,34 @@ def evaluate_answer(answer: str) -> tuple[int, str]:
     return 1, "concise"
 
 
-def generate_follow_up_question(question: str, answer: str, history: list[dict] | None = None) -> str:
+def generate_follow_up_question(
+    question: str,
+    answer: str,
+    history: list[dict] | None = None,
+    session_id: int | None = None,
+    plan: list[dict] | None = None,
+) -> str:
     history = history or []
     topic = _extract_topic(question)
     answer_topic = _extract_topic(answer)
     recent_questions = Counter(_extract_topic(entry.get("question", "")) for entry in history[-3:])
     repeated_topic = recent_questions.most_common(1)[0][0] if recent_questions else None
+
+    if plan:
+        section = plan[0]
+        expectations = section.get("expectations") or []
+        if expectations:
+            for expectation in expectations:
+                if _answer_matches_expectation(answer, expectation):
+                    continue
+                label = section.get("label") or section.get("topic") or "this section"
+                return f"For {label}, can you elaborate on: {expectation}?"
+            label = section.get("label") or section.get("topic") or "this section"
+            if len(plan) > 1:
+                next_section = plan[1]
+                next_label = next_section.get("label") or next_section.get("topic") or "next area"
+                return f"Let's shift to {next_label}: how have you handled {next_section.get('topic', 'this area')} in practice?"
+            return f"For {label}, what trade-off or edge case would you call out?"
 
     response_kind = analyze_response(answer)
     if INSUFFICIENT_CONTEXT_PHRASE in (answer or "").lower():
@@ -84,7 +145,6 @@ def generate_follow_up_question(question: str, answer: str, history: list[dict] 
             return f"What trade-offs would you consider next for {repeated_topic}?"
         return f"What trade-offs or edge cases would you consider next for {answer_topic}?"
 
-    # concise: prefer answer topic if meaningful, else question topic
     chosen = answer_topic if answer_topic != "this topic" else topic
     return f"Can you elaborate on the implementation details of {chosen}?"
 
@@ -98,7 +158,7 @@ def start_interview(user_name: str, user_id: int | None = None):
         db.refresh(interview)
         session_id = interview.id
 
-        first_question = run_question_generation(user_name) or _fallback_first_question(user_name)
+        first_question = run_question_generation(user_name, session_id=interview.id) or _fallback_first_question(user_name)
         interview.current_question = first_question
         db.add(AuditLog(event_type="interview_started", session_id=interview.id, actor_id=user_id, payload=json.dumps({"user_name": user_name})))
         db.commit()
@@ -224,8 +284,29 @@ def _normalize_score(entry: dict) -> int:
     return 0
 
 
-def _next_question_fallback(question: str, answer: str) -> str:
-    return generate_follow_up_question(question, answer)
+def _next_question_fallback(question: str, answer: str, session: InterviewSession | None = None) -> str:
+    plan = _parse_session_plan(session.plan) if session and session.plan else None
+    return generate_follow_up_question(question, answer, session_id=session.id if session else None, plan=plan)
+
+
+def create_session_plan(session_id: int) -> dict | None:
+    db = SessionLocal()
+    try:
+        session = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
+        if not session or not session.job_description:
+            return None
+        from app.rag.plan_graph import run_plan_generation
+
+        plan = run_plan_generation(session.job_description)
+        if not plan:
+            return None
+        session.plan = json.dumps(plan)
+        session.current_section_index = 0
+        db.commit()
+        db.refresh(session)
+        return {"session_id": session.id, "plan": plan, "current_section_index": session.current_section_index}
+    finally:
+        db.close()
 
 
 def submit_answer(session_id: int, answer: str, audio_path: str | None = None):
@@ -236,20 +317,32 @@ def submit_answer(session_id: int, answer: str, audio_path: str | None = None):
             return None
 
         question = session.current_question or _extract_topic(answer)
+        plan = _parse_session_plan(session.plan) if session.plan else None
 
-        evaluation = run_evaluation(question, answer)
+        evaluation = run_evaluation(question, answer, plan=plan)
         if evaluation is None:
             evaluation = _heuristic_evaluation(answer)
-            next_question = _next_question_fallback(question, answer)
+            next_question = _next_question_fallback(question, answer, session)
         else:
-            next_question = evaluation.get("next_question") or _next_question_fallback(question, answer)
+            next_question = run_next_question_generation(question, answer, evaluation=evaluation, plan=plan) or _next_question_fallback(
+                question, answer, session
+            )
 
         score = evaluation["score"]
 
         history = _parse_history(session.history)
         prior_context = [entry.get("answer", "") for entry in history[-4:]]
         evaluation.setdefault("dimensions", score_answer(answer, question, prior_context)["dimensions"])
-        history_entry = {"question": question, "answer": answer, "timestamp": datetime.now(timezone.utc).isoformat(), "score": score, "score_delta": None, "evaluation": evaluation["feedback"], "next_question": next_question, "dimensions": evaluation["dimensions"]}
+        history_entry = {
+            "question": question,
+            "answer": answer,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "score": score,
+            "score_delta": None,
+            "evaluation": evaluation["feedback"],
+            "next_question": next_question,
+            "dimensions": evaluation["dimensions"],
+        }
         if audio_path:
             history_entry["audio_path"] = audio_path
         history.append(history_entry)
@@ -259,7 +352,13 @@ def submit_answer(session_id: int, answer: str, audio_path: str | None = None):
         current_score = round(sum(scores) / len(scores)) if scores else 0
         session.score = current_score
         session.current_question = next_question
-        db.add(AuditLog(event_type="answer_submitted", session_id=session.id, payload=json.dumps({"score": score, "response_kind": analyze_response(answer)})))
+        db.add(
+            AuditLog(
+                event_type="answer_submitted",
+                session_id=session.id,
+                payload=json.dumps({"score": score, "response_kind": analyze_response(answer)}),
+            )
+        )
         db.commit()
     except Exception:
         db.rollback()
@@ -276,6 +375,42 @@ def submit_answer(session_id: int, answer: str, audio_path: str | None = None):
         "next_question": next_question,
         "current_score": current_score,
     }
+
+
+def finalize_interview(session_id: int) -> dict | None:
+    """Finalize a session and generate a comprehensive report.
+    If a plan exists, uses it for assessment; otherwise uses the questions actually asked.
+    """
+    from app.rag.report_graph import run_report_generation
+
+    db = SessionLocal()
+    try:
+        session = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
+        if not session:
+            return None
+
+        history = _parse_history(session.history)
+        plan = _parse_session_plan(session.plan) if session.plan else None
+
+        if plan:
+            report = run_report_generation(plan, history)
+            if report:
+                session.report = json.dumps(report)
+                db.commit()
+                db.refresh(session)
+                return {
+                    "session_id": session.id,
+                    "report": report,
+                    "finalized": True,
+                }
+        return {
+            "session_id": session.id,
+            "report": None,
+            "finalized": False,
+            "reason": "No plan available for report generation.",
+        }
+    finally:
+        db.close()
 
 
 def get_interview_session(session_id: int):
@@ -300,13 +435,18 @@ def get_interview_session(session_id: int):
         if "audio_path" not in entry:
             entry["audio_path"] = None
 
+    plan = _parse_session_plan(session.plan)
     payload = {
         "session_id": session.id,
         "user_name": session.user_name,
         "score": session.score or 0,
+        "job_description": session.job_description,
+        "plan": plan,
+        "current_section_index": session.current_section_index or 0,
+        "report": json.loads(session.report) if session.report else None,
         "history": history,
         "suggested_next_question": (
-            generate_follow_up_question(history[-1]["question"], history[-1]["answer"], history[:-1])
+            generate_follow_up_question(history[-1]["question"], history[-1]["answer"], history[:-1], session_id=session.id, plan=plan)
             if history
             else f"What would you like to explore next with {session.user_name}?"
         ),

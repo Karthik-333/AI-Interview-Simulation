@@ -13,6 +13,7 @@ from app.schemas.interview import (
 )
 from app.services.interview_service import (
     ask_question,
+    finalize_interview,
     get_interview_session,
     start_interview,
     submit_answer,
@@ -69,6 +70,24 @@ def interview_answer(
 def interview_ask(request: InterviewQuestionRequest):
     result = ask_question(request.question, session_id=request.session_id)
     return InterviewQuestionResponse(**result)
+
+
+@router.post("/interview/finalize/{session_id}")
+def interview_finalize(session_id: int, current_user: User | None = Depends(get_current_user_optional)):
+    # ownership check
+    if current_user:
+        from app.core.database import SessionLocal
+        from app.models.interview import InterviewSession
+
+        db = SessionLocal()
+        sess = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
+        db.close()
+        if sess and sess.user_id is not None and sess.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized for this interview session")
+    result = finalize_interview(session_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Interview session not found.")
+    return result
 
 
 @router.get("/interview/session/{session_id}", response_model=InterviewSessionResponse)

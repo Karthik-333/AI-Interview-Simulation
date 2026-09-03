@@ -6,6 +6,8 @@ MCP server (app.mcp.server) and REST fallback (app.api.mcp) both import from her
 from typing import Any
 
 from app.services.interview_service import (
+    create_session_plan,
+    finalize_interview,
     get_interview_session,
     start_interview,
     submit_answer,
@@ -38,6 +40,18 @@ def tool_interview_get(session_id: int) -> dict[str, Any] | None:
     return get_interview_session(session_id)
 
 
+def tool_interview_create_plan(session_id: int) -> dict[str, Any] | None:
+    """Generate and persist an interview plan from a session's job description.
+    Only succeeds if job_description exists on the session."""
+    return create_session_plan(session_id) or {"session_id": session_id, "error": "No job description on session"}
+
+
+def tool_interview_generate_report(session_id: int) -> dict[str, Any] | None:
+    """Finalize an interview session and generate a report from the transcript against the plan.
+    Returns the report if a plan exists; otherwise returns an error message."""
+    return finalize_interview(session_id) or {"session_id": session_id, "error": "Session not found"}
+
+
 def tool_generate_follow_up_hint(session_id: int) -> dict[str, Any] | None:
     """Convenience: return the suggested next question for a session."""
     sess = get_interview_session(session_id)
@@ -66,6 +80,16 @@ TOOL_REGISTRY: dict[str, dict[str, Any]] = {
     "interview_get": {
         "fn": tool_interview_get,
         "description": "Get interview session. Args: session_id",
+        "input_schema": {"type": "object", "properties": {"session_id": {"type": "integer"}}, "required": ["session_id"]},
+    },
+    "interview_create_plan": {
+        "fn": tool_interview_create_plan,
+        "description": "Create interview plan from job description. Args: session_id",
+        "input_schema": {"type": "object", "properties": {"session_id": {"type": "integer"}}, "required": ["session_id"]},
+    },
+    "interview_generate_report": {
+        "fn": tool_interview_generate_report,
+        "description": "Finalize interview and generate report. Args: session_id",
         "input_schema": {"type": "object", "properties": {"session_id": {"type": "integer"}}, "required": ["session_id"]},
     },
     "follow_up_hint": {

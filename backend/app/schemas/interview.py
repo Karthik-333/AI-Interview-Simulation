@@ -60,6 +60,10 @@ class InterviewSessionResponse(BaseModel):
     session_id: int
     user_name: str
     score: int
+    job_description: Optional[str] = None
+    plan: Optional[list[dict]] = None
+    current_section_index: int = 0
+    report: Optional[dict] = None
     history: list[InterviewHistoryEntry]
     suggested_next_question: Optional[str] = None
     created_at: datetime
